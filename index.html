@@ -1671,7 +1671,7 @@ function runPad(code){
     </div>
     <p class="padstatus" id="padStatus">Joining room ${code}…</p>
     <div class="padmain">
-      <div class="padzone"><div class="padstick" id="padMove"><div class="padknob" id="padMoveK"></div></div><span class="padlbl">Drive</span></div>
+      <div class="padzone"><div class="padstick" id="padMove"><div class="padknob" id="padMoveK"></div></div><span class="padlbl">Drive · tap to fire</span></div>
       <div class="padmid"><button class="padmine" id="padMine">Mine</button></div>
       <div class="padzone"><div class="padstick aim" id="padAim"><div class="padknob" id="padAimK"></div></div><span class="padlbl">Drag to aim · let go to fire</span></div>
     </div>`;
@@ -1685,7 +1685,7 @@ function runPad(code){
   const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
   // a stick reports -1..1 on each axis
   const stick = (el, knob, onMove, onEnd) => {
-    let id = null, moved = false;
+    let id = null, moved = false, t0 = 0, x0 = 0, y0 = 0, far = 0;
     const at = e => {
       const r = el.getBoundingClientRect();
       let dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2), dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
@@ -1694,19 +1694,27 @@ function runPad(code){
       if (l > .22) moved = true;
       onMove(dx, dy, l);
     };
-    el.addEventListener('pointerdown', e => { id = e.pointerId; moved = false; el.setPointerCapture(id); el.classList.add('on'); wake(); at(e); e.preventDefault(); });
-    el.addEventListener('pointermove', e => { if (e.pointerId === id) at(e); });
-    const end = e => { if (e.pointerId !== id) return; id = null; el.classList.remove('on'); knob.style.transform = ''; onEnd(moved); };
+    el.addEventListener('pointerdown', e => { id = e.pointerId; moved = false; t0 = performance.now(); x0 = e.clientX; y0 = e.clientY; far = 0; el.setPointerCapture(id); el.classList.add('on'); wake(); at(e); e.preventDefault(); });
+    el.addEventListener('pointermove', e => { if (e.pointerId === id) { far = Math.max(far, Math.hypot(e.clientX - x0, e.clientY - y0)); at(e); } });
+    const end = e => { if (e.pointerId !== id) return; id = null; el.classList.remove('on'); knob.style.transform = ''; onEnd(moved, performance.now() - t0 < 250 && far < 14); };
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
     el.addEventListener('contextmenu', e => e.preventDefault());
   };
-  stick(q('#padMove'), q('#padMoveK'), (x, y, l) => { st.mx = l < .18 ? 0 : x; st.my = l < .18 ? 0 : y; send(); }, () => { st.mx = st.my = 0; send(); });
+  stick(q('#padMove'), q('#padMoveK'), (x, y, l) => { st.mx = l < .18 ? 0 : x; st.my = l < .18 ? 0 : y; send(); }, (moved, tap) => { st.mx = st.my = 0; if (tap) { st.f++; buzz(15); } send(); });
   // aiming keeps the last direction; letting go (or a plain tap) fires along it
   stick(q('#padAim'), q('#padAimK'), (x, y, l) => { if (l > .3) { st.ax = x; st.ay = y; send(); } }, () => { st.f++; send(); buzz(15); });
   q('#padMine').addEventListener('pointerdown', e => { e.preventDefault(); st.m++; q('#padMine').classList.add('on'); send(); buzz(25); });
   const up = () => q('#padMine').classList.remove('on');
   q('#padMine').addEventListener('pointerup', up); q('#padMine').addEventListener('pointercancel', up);
+  // stop double-tap and pinch zoom: they blow the controls up and strand the player
+  const vp = document.querySelector('meta[name=viewport]');
+  if (vp) vp.setAttribute('content', 'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover');
+  document.documentElement.style.touchAction = 'none'; document.body.style.touchAction = 'none';
   document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+  let lastEnd = 0;
+  document.addEventListener('touchend', e => { const n = Date.now(); if (n - lastEnd < 350) e.preventDefault(); lastEnd = n; }, { passive: false });
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
   (async () => {
     const api = await getRoomApi();
@@ -1731,7 +1739,7 @@ function runPad(code){
       if (lastAlive && !alive) buzz([60, 40, 120]);
       lastAlive = alive;
       if (typeof T.mi === 'number' && !inLobby) q('#padInfo').textContent = `Mission ${T.mi | 0} · Lives ${T.li | 0}`;
-      status(inLobby ? 'Waiting on the TV. Press Start there, or scan a second phone.' : T.ph === 'play' ? (alive ? 'Left thumb drives. Drag the right stick to aim, let go to fire.' : 'Your tank is out. Your partner can still clear the mission.') : T.ph === 'intro' ? 'Get ready…' : T.ph === 'over' ? 'Run over. Check the TV.' : 'Next mission coming up…');
+      status(inLobby ? 'Waiting on the TV. Press Start there, or scan a second phone.' : T.ph === 'play' ? (alive ? 'Left stick drives, right stick aims. Let go of the aim stick, or tap either stick, to fire.' : 'Your tank is out. Your partner can still clear the mission.') : T.ph === 'intro' ? 'Get ready…' : T.ph === 'over' ? 'Run over. Check the TV.' : 'Next mission coming up…');
     }, () => status('The connection to the room was lost. Scan the code again.'));
   })();
 }
