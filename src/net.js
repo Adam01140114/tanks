@@ -1,13 +1,20 @@
 /* ---------- Rooms: the game's own WebSocket relay when hosted, Claude's room capability as a fallback ---------- */
 // Only function declarations live here: the phone controller calls them before the rest of the script has run.
+// A failed lookup is not remembered, so pressing Co-op again (or a phone rescanning) tries afresh.
 function getRoomApi(){
-  if (!getRoomApi.p) getRoomApi.p = (async () => {
-    if (/^https?:$/.test(location.protocol) && await wsProbe()) return { kind: 'ws', join: wsJoin };
-    if (window.claude && typeof window.claude.use === 'function') {
-      try { const r = await window.claude.use('room'); if (r) return { kind: 'claude', join: n => r.join(n) }; } catch (e) {}
-    }
-    return null;
-  })();
+  if (!getRoomApi.p) {
+    getRoomApi.p = (async () => {
+      if (/^https?:$/.test(location.protocol)) {
+        // a server that is still waking up can miss the first knock
+        for (let i = 0; i < 3; i++) { if (await wsProbe()) return { kind: 'ws', join: wsJoin }; }
+      }
+      if (window.claude && typeof window.claude.use === 'function') {
+        try { const r = await window.claude.use('room'); if (r) return { kind: 'claude', join: n => r.join(n) }; } catch (e) {}
+      }
+      return null;
+    })();
+    getRoomApi.p.then(api => { if (!api) getRoomApi.p = null; });
+  }
   return getRoomApi.p;
 }
 function wsUrl(){ return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'; }
@@ -15,7 +22,7 @@ function wsProbe(){
   return new Promise(res => {
     let ws;
     try { ws = new WebSocket(wsUrl()); } catch (e) { res(false); return; }
-    const t = setTimeout(() => { try { ws.close(); } catch (e) {} res(false); }, 5000);
+    const t = setTimeout(() => { try { ws.close(); } catch (e) {} res(false); }, 8000);
     ws.onopen = () => { clearTimeout(t); try { ws.close(); } catch (e) {} res(true); };
     ws.onerror = () => { clearTimeout(t); res(false); };
   });

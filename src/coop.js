@@ -23,10 +23,10 @@ async function openCoop(){
   audioInit(); sfx('ui');
   leaveCoop();
   $('#title').hidden = true; $('#lobby').hidden = false; $('#lRoom').hidden = true;
-  lobbyMsg('Opening a room…');
+  lobbyMsg('Connecting to the game server…');
   const api = await getRoomApi();
   if ($('#lobby').hidden) return;
-  if (!api) { lobbyMsg('Co-op needs the game server. Open the game from its web address (not as a saved file) and try again.'); return; }
+  if (!api) { lobbyMsg('Could not reach the game server. Press Back, then Co-op to try again. If you opened a saved copy of the game, open it from its web address instead.'); return; }
   const code = makeCode();
   let room;
   try { room = await api.join('tt-' + code); }
