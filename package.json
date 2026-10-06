@@ -1,0 +1,16 @@
+{
+  "name": "tabletop-tanks",
+  "version": "1.0.0",
+  "description": "A toy-diorama tank battler with couch co-op using phones as controllers.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "node src/build.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
