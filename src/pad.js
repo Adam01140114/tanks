@@ -77,8 +77,9 @@ function runPad(code){
       const alive = Array.isArray(T.al) ? (T.al[idx] ? 1 : 0) : 1;
       if (lastAlive && !alive) buzz([60, 40, 120]);
       lastAlive = alive;
-      if (typeof T.mi === 'number' && !inLobby) q('#padInfo').textContent = `Mission ${T.mi | 0} · Lives ${T.li | 0}`;
-      status(inLobby ? 'Waiting on the TV. Press Start there, or scan a second phone.' : T.ph === 'play' ? (alive ? 'Left stick drives, right stick aims. Let go of the aim stick, or tap either stick, to fire.' : 'Your tank is out. Your partner can still clear the mission.') : T.ph === 'intro' ? 'Get ready…' : T.ph === 'over' ? 'Run over. Check the TV.' : 'Next mission coming up…');
+      const vs = T.md === 'vs', sc = Array.isArray(T.sc) ? T.sc : [0, 0];
+      if (typeof T.mi === 'number' && !inLobby) q('#padInfo').textContent = vs ? `Mission ${T.mi | 0} · You ${sc[idx] | 0} – ${sc[1 - idx] | 0} rival` : `Mission ${T.mi | 0} · Lives ${T.li | 0}`;
+      status(inLobby ? 'Waiting on the TV. Press Start there, or scan a second phone.' : T.ph === 'play' ? (alive ? 'Left stick drives, right stick aims. Let go of the aim stick, or tap either stick, to fire.' : (vs ? 'Your tank is out. You come back next mission if your rival clears this one.' : 'Your tank is out. Your partner can still clear the mission.')) : T.ph === 'intro' ? 'Get ready…' : T.ph === 'over' ? (vs ? 'Game over. Check the TV for the winner.' : 'Run over. Check the TV.') : 'Next mission coming up…');
     }, () => status('The connection to the room was lost. Scan the code again.'));
   })();
 }

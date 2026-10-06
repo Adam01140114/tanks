@@ -1,12 +1,14 @@
 /* ---------- run state ---------- */
 const MEDALS = [null, { n: 'Bronze', col: '#c98a4b', at: 5 }, { n: 'Silver', col: '#c9d0d6', at: 10 }, { n: 'Gold', col: '#f2b632', at: 20 }, { n: 'Platinum', col: '#bfe9f2', at: 30 }];
 const medalFor = n => n >= 30 ? 4 : n >= 20 ? 3 : n >= 10 ? 2 : n >= 5 ? 1 : 0;
-const G = { state: 'title', mission: 1, lives: 3, kills: new Array(10).fill(0), killed: new Set(), practice: false, timer: 0, cleared: 0, paused: false, start: 1, medalShown: 0 };
+const G = { vs: false, score: [new Array(10).fill(0), new Array(10).fill(0)], state: 'title', mission: 1, lives: 3, kills: new Array(10).fill(0), killed: new Set(), practice: false, timer: 0, cleared: 0, paused: false, start: 1, medalShown: 0 };
 
 function enemiesAlive(){ return tanks.filter(t => t.alive && t.team === 1); }
 function hudUpdate(){
   $('#hMission').textContent = 'Mission ' + G.mission;
   $('#hLives').textContent = G.lives;
+  $('#hLivesBox').hidden = G.vs; $('#hScore').hidden = !G.vs;
+  if (G.vs) { $('#hS1').textContent = vsTotal(0); $('#hS2').textContent = vsTotal(1); }
   const box = $('#hEnemies'); box.textContent = '';
   for (const t of tanks) if (t.team === 1) {
     const i = document.createElement('i'); i.className = 'tico'; i.style.background = t.def.col;
@@ -42,13 +44,17 @@ function loadMission(n, retry){
   G.state = 'intro'; G.timer = 3;
   musicStop(.2);
   const left = enemiesAlive().length;
-  banner('<h2>Mission ' + n + '</h2><p>Enemy tanks: ' + left + '</p>' + livesHTML(G.lives));
+  banner('<h2>Mission ' + n + '</h2><p>Enemy tanks: ' + left + '</p>' + (G.vs ? scoreHTML() : livesHTML(G.lives)));
   jingle('start');
 }
-function onTankKilled(t){
+const vsTotal = i => G.score[i].reduce((a, b) => a + b, 0);
+const scoreHTML = () => '<span class="lv"><i class="tico" style="background:' + TIERS[0].col + '"></i>' + vsTotal(0) + '<span style="opacity:.6">–</span>' + vsTotal(1) + '<i class="tico" style="background:' + TIERS[10].col + '"></i></span>';
+function onTankKilled(t, by){
   if (t.team === 1) {
     G.killed.add(t.idx);
     G.kills[t.tier]++;
+    // versus: a point to whichever player fired the shell or laid the mine
+    if (G.vs && by && by.team === 0) G.score[by === player ? 0 : 1][t.tier]++;
     jingle('kill');
     hudUpdate();
   } else if ((G.state === 'play' || G.state === 'clearing') && !livePlayers().length) {
@@ -62,6 +68,8 @@ function beginPlay(){
   musicStart();
 }
 function nextMission(){
+  // the 2-player game on the Wii stops after mission 20 and crowns whoever scored more
+  if (G.vs) { if (G.mission >= 20) return endRun(true); return loadMission(G.mission + 1); }
   if (!G.practice) save.reached = Math.max(save.reached, G.mission + 1);
   const won20 = G.mission === 20 && !save.unlocked && !G.practice;
   if (won20) { save.unlocked = true; persist(); return endRun(true, 'Missions 21–100 are now unlocked.'); }
@@ -73,31 +81,33 @@ function tallyTotal(){ return G.kills.reduce((a, b) => a + b, 0); }
 function endRun(victory, note){
   G.state = 'results'; musicStop(.3); banner(null);
   $('#hud').hidden = true;
-  const total = tallyTotal(), medal = G.practice || G.start !== 1 ? 0 : medalFor(G.cleared);
+  const total = tallyTotal(), medal = G.practice || G.vs || G.start !== 1 ? 0 : medalFor(G.cleared);
   let best = false;
   if (!G.practice && !G.coop && G.start === 1) {
     if (G.cleared > save.best || (G.cleared === save.best && total > save.bestTotal)) { best = true; save.best = G.cleared; save.bestTotal = total; }
     save.medal = Math.max(save.medal, medal);
     persist();
   }
-  $('#rTitle').textContent = victory ? 'Victory!' : 'Game over';
-  $('#rSub').textContent = (G.coop ? 'Co-op · ' : '') + (G.practice ? 'Practice run · ' : '') + 'Missions cleared: ' + G.cleared + (best ? ' · New best!' : '') + (note ? ' · ' + note : '');
+  const a = vsTotal(0), b = vsTotal(1);
+  $('#rTitle').textContent = G.vs ? (a > b ? 'Blue wins!' : b > a ? 'Red wins!' : "It's a tie!") : victory ? 'Victory!' : 'Game over';
+  $('#rSub').textContent = (G.vs ? 'Versus · ' + (victory ? 'All 20 missions cleared' : 'Both tanks went down') + ' · ' : G.coop ? 'Co-op · ' : '') + (G.practice ? 'Practice run · ' : '') + 'Missions cleared: ' + G.cleared + (best ? ' · New best!' : '') + (note ? ' · ' + note : '');
   const tl = $('#rTally'); tl.textContent = '';
   for (let i = 1; i < 10; i++) {
     const row = document.createElement('div');
-    row.innerHTML = '<i class="tico" style="background:' + TIERS[i].col + '"></i><span>' + TIERS[i].n + '</span><b>' + G.kills[i] + '</b>';
+    row.innerHTML = '<i class="tico" style="background:' + TIERS[i].col + '"></i><span>' + TIERS[i].n + '</span><b>' + (G.vs ? vsPair(G.score[0][i], G.score[1][i]) : G.kills[i]) + '</b>';
     if (!G.kills[i]) row.style.opacity = .4;
     tl.appendChild(row);
   }
-  $('#rTotal').textContent = total;
+  if (G.vs) $('#rTotal').innerHTML = vsPair(a, b); else $('#rTotal').textContent = total;
   const md = MEDALS[medal];
   $('#rMedal').innerHTML = md ? '<span class="medal" style="background:' + md.col + '">' + md.n.slice(0, 4) + '</span>' : '';
   $('#results').hidden = false;
   jingle(victory ? 'medal' : 'over');
 }
-function startRun(n, practice, coopOn){
+const vsPair = (a, b) => '<span style="color:#2f5fb8">' + a + '</span> – <span style="color:#c8382f">' + b + '</span>';
+function startRun(n, practice, coopOn, vsOn){
   audioInit();
-  Object.assign(G, { lives: 3, kills: new Array(10).fill(0), practice, coop: !!coopOn, cleared: 0, start: n, paused: false, medalShown: 0 });
+  Object.assign(G, { vs: !!vsOn, score: [new Array(10).fill(0), new Array(10).fill(0)], lives: 3, kills: new Array(10).fill(0), practice, coop: !!coopOn, cleared: 0, start: n, paused: false, medalShown: 0 });
   for (const id of ['#title', '#results', '#select', '#paused', '#lobby']) $(id).hidden = true;
   $('#hud').hidden = false;
   loadMission(n);
@@ -105,7 +115,7 @@ function startRun(n, practice, coopOn){
 function toTitle(){
   for (const id of ['#results', '#select', '#paused', '#hud', '#lobby']) $(id).hidden = true;
   banner(null); musicStop(.2); leaveCoop();
-  G.state = 'title'; G.paused = false; G.coop = false;
+  G.state = 'title'; G.paused = false; G.coop = false; G.vs = false;
   showTitle();
 }
 function showTitle(){
@@ -156,7 +166,8 @@ function update(dt){
     for (const m of mines) { m.alive = false; scene.remove(m.mesh); m.owner.nm--; }
   } else if (G.state === 'cleared' && G.timer <= 0) {
     const md = G.practice || G.start !== 1 ? 0 : medalFor(G.cleared);
-    if (MISSIONS[G.mission - 1].l) { G.state = 'bonus'; G.timer = 2.6; G.lives++; banner('<h2>Bonus tank!</h2>' + livesHTML(G.lives), 'gold'); jingle('life'); hudUpdate(); }
+    if (G.vs) nextMission();
+    else if (MISSIONS[G.mission - 1].l) { G.state = 'bonus'; G.timer = 2.6; G.lives++; banner('<h2>Bonus tank!</h2>' + livesHTML(G.lives), 'gold'); jingle('life'); hudUpdate(); }
     else if (md > G.medalShown) { G.medalShown = md; G.state = 'medal'; G.timer = 2.6; banner('<h2>' + MEDALS[md].n + ' medal!</h2><p>Cleared mission ' + G.mission + '</p>', 'gold'); jingle('medal'); }
     else nextMission();
   } else if (G.state === 'bonus' && G.timer <= 0) {
@@ -164,6 +175,11 @@ function update(dt){
     if (md > G.medalShown) { G.medalShown = md; G.state = 'medal'; G.timer = 2.6; banner('<h2>' + MEDALS[md].n + ' medal!</h2><p>Cleared mission ' + G.mission + '</p>', 'gold'); jingle('medal'); }
     else nextMission();
   } else if (G.state === 'medal' && G.timer <= 0) nextMission();
+  else if (G.state === 'dying' && G.timer <= 0 && G.vs) {
+    // versus has no lives: both tanks down in the same mission ends the game
+    musicStop(.2); jingle('over'); G.state = 'over'; G.timer = 2.6;
+    banner('<h2>Both tanks down</h2><p>Missions cleared: ' + G.cleared + '</p>' + scoreHTML());
+  }
   else if (G.state === 'dying' && G.timer <= 0) {
     G.lives--; musicStop(.2); jingle(G.lives > 0 ? 'death' : 'over');
     if (G.lives > 0) { G.state = 'lost'; G.timer = 2.4; banner('<h2>Tank destroyed</h2>' + livesHTML(G.lives), ''); hudUpdate(); }

@@ -19,7 +19,12 @@ function coopSpawn(m){
 }
 const lob = () => ({ sub: $('#lSub'), room: $('#lRoom'), qr: $('#qr'), link: $('#lLink'), seats: $('#lSeats'), start: $('#lStart'), note: $('#lNote') });
 function lobbyMsg(t){ $('#lSub').textContent = t; }
-async function openCoop(){
+async function openCoop(mode){
+  const vs = mode === 'vs';
+  $('#lTitle').textContent = vs ? 'Versus' : 'Couch co-op';
+  $('#lRules').textContent = vs
+    ? 'Fight through missions 1–20 side by side. Every enemy tank you destroy is a point for you, and the higher score after mission 20 wins. Shells and mines hurt your rival too. There are no lives: a destroyed player sits out until the next mission, and the game ends if both tanks go down in the same mission.'
+    : 'Clear the campaign together. You share one pool of lives, and a mission only fails when both tanks are destroyed.';
   audioInit(); sfx('ui');
   leaveCoop();
   $('#title').hidden = true; $('#lobby').hidden = false; $('#lRoom').hidden = true;
@@ -32,7 +37,7 @@ async function openCoop(){
   try { room = await api.join('tt-' + code); }
   catch (e) { lobbyMsg('The room could not be opened. Go back and try again in a moment.'); return; }
   if ($('#lobby').hidden) { room.leave().catch(() => {}); return; }
-  coop = { code, room, base: api.kind === 'ws' ? location.origin + location.pathname : ARTIFACT_URL, slots: [null, null], ctrl: [null, null], hudT: 0, wasAlive: [true, true] };
+  coop = { mode: vs ? 'vs' : 'coop', code, room, base: api.kind === 'ws' ? location.origin + location.pathname : ARTIFACT_URL, slots: [null, null], ctrl: [null, null], hudT: 0, wasAlive: [true, true] };
   room.presence({ r: 'tv', sl: [null, null], ctl: [null, null], ph: 'wait' }).catch(() => {});
   room.onPeers(onCoopPeers, () => { if (!$('#lobby').hidden) lobbyMsg('The connection to the room was lost. Go back and open a new room.'); });
   showLobby();
@@ -69,7 +74,7 @@ function renderSeats(){
 function pushTv(extra){
   if (!coop) return;
   const ph = G.state === 'play' ? 'play' : G.state === 'intro' ? 'intro' : G.state === 'results' ? 'over' : $('#lobby').hidden ? 'between' : 'wait';
-  coop.room.presence(Object.assign({ sl: coop.slots.slice(), ctl: coop.ctrl.slice(), ph, mi: G.mission, li: G.lives, al: [player ? (player.alive ? 1 : 0) : 1, player2 ? (player2.alive ? 1 : 0) : 1] }, extra || {})).catch(() => {});
+  coop.room.presence(Object.assign({ sl: coop.slots.slice(), ctl: coop.ctrl.slice(), ph, md: coop.mode, sc: [vsTotal(0), vsTotal(1)], mi: G.mission, li: G.lives, al: [player ? (player.alive ? 1 : 0) : 1, player2 ? (player2.alive ? 1 : 0) : 1] }, extra || {})).catch(() => {});
 }
 function onCoopPeers(ch){
   if (!coop) return;
@@ -95,7 +100,7 @@ function coopGo(){
   coop.ctrl = pads.length === 2 ? [coop.slots[0], coop.slots[1]] : ['kb', pads[0]];
   padIn[0] = newPad(); padIn[1] = newPad();
   coop.wasAlive = [true, true];
-  startRun(1, false, true);
+  startRun(1, false, true, coop.mode === 'vs');
   pushTv();
 }
 function coopRestart(){ coopGo(); }
@@ -128,7 +133,8 @@ function toastMsg(t){
   const el = $('#toast'); el.textContent = t; el.hidden = false;
   clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 3200);
 }
-$('#tCoop').addEventListener('click', openCoop);
+$('#tCoop').addEventListener('click', () => openCoop('coop'));
+$('#tVersus').addEventListener('click', () => openCoop('vs'));
 $('#lBack').addEventListener('click', () => { sfx('ui'); $('#lobby').hidden = true; leaveCoop(); toTitle(); });
 $('#lStart').addEventListener('click', () => { sfx('ui'); coopGo(); });
 $('#lCopy').addEventListener('click', () => {

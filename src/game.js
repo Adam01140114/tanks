@@ -190,7 +190,7 @@ function bulletHits(){
     for (const t of tanks) {
       if (!t.alive || (t === b.owner && b.bn === 0 && b.age < .25)) continue;
       const dx = t.x - b.x, dz = t.z - b.z;
-      if (dx * dx + dz * dz < (t.r + .08) * (t.r + .08)) { killBullet(b, false); killTank(t); break; }
+      if (dx * dx + dz * dz < (t.r + .08) * (t.r + .08)) { killBullet(b, false); killTank(t, b.owner); break; }
     }
     if (!b.alive) continue;
     for (const o of bullets) {
@@ -262,7 +262,7 @@ function explodeMine(m){
   const c0 = colOf(m.x), r0 = rowOf(m.z), cr = Math.ceil(MINE_R);
   for (let r = r0 - cr; r <= r0 + cr; r++) for (let c = c0 - cr; c <= c0 + cr; c++)
     if (cellAt(c, r) === 2 && Math.hypot(cellX(c) - m.x, cellZ(r) - m.z) < MINE_R + .25) { breakCork(c, r); sfx('cork', .6); }
-  for (const t of tanks) if (t.alive && Math.hypot(t.x - m.x, t.z - m.z) < MINE_R) killTank(t);
+  for (const t of tanks) if (t.alive && Math.hypot(t.x - m.x, t.z - m.z) < MINE_R) killTank(t, m.owner);
   for (const b of bullets) if (b.alive && Math.hypot(b.x - m.x, b.z - m.z) < MINE_R) killBullet(b, false);
   for (const o of mines) if (o.alive && Math.hypot(o.x - m.x, o.z - m.z) < MINE_R) o.fuse = Math.min(o.fuse, .12);
 }
@@ -286,7 +286,7 @@ function updateMines(dt){
 }
 
 /* ---------- destruction ---------- */
-function killTank(t){
+function killTank(t, by){
   if (!t.alive) return;
   t.alive = false; scene.remove(t.grp);
   addX(t.x, t.z, t.def.col);
@@ -295,7 +295,7 @@ function killTank(t){
   for (let i = 0; i < 14; i++) emit(firePool, t.x, .4, t.z, rnd(3), 1 + Math.random() * 3, rnd(3), Math.random() < .5 ? '#ffb340' : '#ff6a2a', .25 + Math.random() * .25, .35 + Math.random() * .3, 0, 3);
   for (let i = 0; i < 12; i++) emit(smokePool, t.x + rnd(.3), .5, t.z + rnd(.3), rnd(1), 1.2 + Math.random() * 1.5, rnd(1), Math.random() < .5 ? '#4a4540' : '#7d756c', .6 + Math.random() * .5, 1.6 + Math.random(), 0, 1.2);
   sfx('tankboom'); shake(t.team === 0 ? .5 : .25, .4);
-  onTankKilled(t);
+  onTankKilled(t, by);
 }
 
 /* ---------- enemy AI ---------- */
