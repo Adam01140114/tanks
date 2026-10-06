@@ -4,7 +4,7 @@ A toy-diorama tank battler in three.js, modeled on Wii Play's *Tanks!*. Fight th
 
 ## Couch co-op
 
-Click **Co-op** or **Versus** on the title screen. The screen you're on becomes the TV and shows a QR code. Scan it with one or two phones, and each phone becomes a controller:
+Click **Co-op**, **Versus** or **Duel** on the title screen. The screen you're on becomes the TV and shows a QR code. Scan it with one or two phones, and each phone becomes a controller:
 
 - **Left stick:** drive
 - **Right stick:** drag to aim, let go to fire
@@ -15,6 +15,10 @@ With one phone, player 1 plays on the keyboard and mouse. The phones only need i
 ## Versus
 
 Versus follows the Wii's 2-player rules. Both players fight through missions 1–20 side by side. Every enemy tank you destroy is a point for you, and the higher score after mission 20 wins. Shells and mines hurt your rival too. There are no lives: a destroyed player sits out until the next mission, and the game ends if both tanks go down in the same mission.
+
+## Duel
+
+A 1-on-1 fight with no enemy tanks. Both players have the same shells and mines as the campaign: five shells out at once, one bounce each, and two mines. Destroy your rival to take the round. First to five rounds wins, and each round moves to a new arena taken from the campaign maps. If both tanks go down together, the round is a draw.
 
 ## Controls (keyboard and mouse)
 

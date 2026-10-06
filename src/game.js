@@ -151,11 +151,11 @@ function fire(t){
   const d = t.def;
   if (t.nb >= d.mb || t.cool > 0 || !t.alive) return false;
   const sx = Math.sin(t.ta), sz = Math.cos(t.ta), mx = t.x + sx * .7, mz = t.z + sz * .7;
-  t.cool = d.cd; t.stun = t.team === 0 ? .08 : (d.firestun || .12);
+  t.cool = d.cd; t.stun = t.team !== 1 ? .08 : (d.firestun || .12);
   t.nb++;
   for (let i = 0; i < 5; i++) emit(smokePool, mx + rnd(.05), .58, mz + rnd(.05), sx * (1 + Math.random()) + rnd(.4), .3, sz * (1 + Math.random()) + rnd(.4), '#f4efe6', .22 + Math.random() * .12, .45, 0, 3);
   emit(firePool, mx, .6, mz, sx, 0, sz, '#ffd27a', .3, .08);
-  sfx(d.rocket ? 'rocket' : 'fire', t.team === 0 ? 1 : .6);
+  sfx(d.rocket ? 'rocket' : 'fire', t.team !== 1 ? 1 : .6);
   const b = { x: mx, z: mz, vx: sx * d.bspd, vz: sz * d.bspd, ric: d.ric, bn: 0, owner: t, rocket: !!d.rocket, age: 0, alive: true, trail: 0, mesh: makeShell(d.rocket) };
   bullets.push(b);
   // a barrel jammed into a wall pops the shell immediately
@@ -249,7 +249,7 @@ function layMine(t){
   const l = new THREE.Mesh(mineLightGeo, lm); l.position.y = .25;
   g.add(a, d, l); scene.add(g);
   mines.push({ x: t.x, z: t.z, owner: t, team: t.team, fuse: 10, alive: true, mesh: g, light: lm, blink: 0, age: 0 });
-  t.nm++; sfx('mine', t.team === 0 ? 1 : .6);
+  t.nm++; sfx('mine', t.team !== 1 ? 1 : .6);
   return true;
 }
 function explodeMine(m){
@@ -294,7 +294,7 @@ function killTank(t, by){
   for (let i = 0; i < 16; i++) emit(chipPool, t.x + rnd(.3), .4, t.z + rnd(.3), rnd(4), 3 + Math.random() * 4, rnd(4), Math.random() < .6 ? t.def.col : '#3a3532', .1 + Math.random() * .12, 1.4 + Math.random(), 14, .4);
   for (let i = 0; i < 14; i++) emit(firePool, t.x, .4, t.z, rnd(3), 1 + Math.random() * 3, rnd(3), Math.random() < .5 ? '#ffb340' : '#ff6a2a', .25 + Math.random() * .25, .35 + Math.random() * .3, 0, 3);
   for (let i = 0; i < 12; i++) emit(smokePool, t.x + rnd(.3), .5, t.z + rnd(.3), rnd(1), 1.2 + Math.random() * 1.5, rnd(1), Math.random() < .5 ? '#4a4540' : '#7d756c', .6 + Math.random() * .5, 1.6 + Math.random(), 0, 1.2);
-  sfx('tankboom'); shake(t.team === 0 ? .5 : .25, .4);
+  sfx('tankboom'); shake(t.team !== 1 ? .5 : .25, .4);
   onTankKilled(t, by);
 }
 

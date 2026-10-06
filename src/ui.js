@@ -1,14 +1,15 @@
 /* ---------- run state ---------- */
 const MEDALS = [null, { n: 'Bronze', col: '#c98a4b', at: 5 }, { n: 'Silver', col: '#c9d0d6', at: 10 }, { n: 'Gold', col: '#f2b632', at: 20 }, { n: 'Platinum', col: '#bfe9f2', at: 30 }];
 const medalFor = n => n >= 30 ? 4 : n >= 20 ? 3 : n >= 10 ? 2 : n >= 5 ? 1 : 0;
-const G = { vs: false, score: [new Array(10).fill(0), new Array(10).fill(0)], state: 'title', mission: 1, lives: 3, kills: new Array(10).fill(0), killed: new Set(), practice: false, timer: 0, cleared: 0, paused: false, start: 1, medalShown: 0 };
+const G = { duel: false, round: 1, wins: [0, 0], vs: false, score: [new Array(10).fill(0), new Array(10).fill(0)], state: 'title', mission: 1, lives: 3, kills: new Array(10).fill(0), killed: new Set(), practice: false, timer: 0, cleared: 0, paused: false, start: 1, medalShown: 0 };
 
 function enemiesAlive(){ return tanks.filter(t => t.alive && t.team === 1); }
 function hudUpdate(){
-  $('#hMission').textContent = 'Mission ' + G.mission;
+  $('#hMission').textContent = G.duel ? 'Round ' + G.round : 'Mission ' + G.mission;
   $('#hLives').textContent = G.lives;
-  $('#hLivesBox').hidden = G.vs; $('#hScore').hidden = !G.vs;
-  if (G.vs) { $('#hS1').textContent = vsTotal(0); $('#hS2').textContent = vsTotal(1); }
+  const two = G.vs || G.duel;
+  $('#hLivesBox').hidden = two; $('#hScore').hidden = !two;
+  if (two) { const [a, b] = pairScore(); $('#hS1').textContent = a; $('#hS2').textContent = b; }
   const box = $('#hEnemies'); box.textContent = '';
   for (const t of tanks) if (t.team === 1) {
     const i = document.createElement('i'); i.className = 'tico'; i.style.background = t.def.col;
@@ -16,6 +17,7 @@ function hudUpdate(){
     box.appendChild(i);
   }
   const counts = new Array(10).fill(0); for (const t of enemiesAlive()) counts[t.tier]++;
+  if (G.duel) for (const k of [1, 4, 5, 6]) counts[k] = 1; // no enemies on the board, so give the band a fixed line-up
   musicLayers(counts);
 }
 function banner(html, cls){
@@ -48,7 +50,8 @@ function loadMission(n, retry){
   jingle('start');
 }
 const vsTotal = i => G.score[i].reduce((a, b) => a + b, 0);
-const scoreHTML = () => '<span class="lv"><i class="tico" style="background:' + TIERS[0].col + '"></i>' + vsTotal(0) + '<span style="opacity:.6">–</span>' + vsTotal(1) + '<i class="tico" style="background:' + TIERS[10].col + '"></i></span>';
+const pairScore = () => G.duel ? G.wins : [vsTotal(0), vsTotal(1)];
+const scoreHTML = () => '<span class="lv"><i class="tico" style="background:' + TIERS[0].col + '"></i>' + pairScore()[0] + '<span style="opacity:.6">–</span>' + pairScore()[1] + '<i class="tico" style="background:' + TIERS[10].col + '"></i></span>';
 function onTankKilled(t, by){
   if (t.team === 1) {
     G.killed.add(t.idx);
@@ -57,6 +60,8 @@ function onTankKilled(t, by){
     if (G.vs && by && by.team === 0) G.score[by === player ? 0 : 1][t.tier]++;
     jingle('kill');
     hudUpdate();
+  } else if (G.duel) {
+    // rounds are settled in update()
   } else if ((G.state === 'play' || G.state === 'clearing') && !livePlayers().length) {
     // co-op: the mission only fails once both tanks are gone
     G.state = 'dying'; G.timer = 1.6;
@@ -88,9 +93,9 @@ function endRun(victory, note){
     save.medal = Math.max(save.medal, medal);
     persist();
   }
-  const a = vsTotal(0), b = vsTotal(1);
-  $('#rTitle').textContent = G.vs ? (a > b ? 'Blue wins!' : b > a ? 'Red wins!' : "It's a tie!") : victory ? 'Victory!' : 'Game over';
-  $('#rSub').textContent = (G.vs ? 'Versus · ' + (victory ? 'All 20 missions cleared' : 'Both tanks went down') + ' · ' : G.coop ? 'Co-op · ' : '') + (G.practice ? 'Practice run · ' : '') + 'Missions cleared: ' + G.cleared + (best ? ' · New best!' : '') + (note ? ' · ' + note : '');
+  const [a, b] = pairScore();
+  $('#rTitle').textContent = G.duel ? (a > b ? 'Blue wins the duel!' : 'Red wins the duel!') : G.vs ? (a > b ? 'Blue wins!' : b > a ? 'Red wins!' : "It's a tie!") : victory ? 'Victory!' : 'Game over';
+  $('#rSub').textContent = G.duel ? 'Duel · first to ' + DUEL_WINS + ' rounds · ' + (G.round) + ' rounds played' : (G.vs ? 'Versus · ' + (victory ? 'All 20 missions cleared' : 'Both tanks went down') + ' · ' : G.coop ? 'Co-op · ' : '') + (G.practice ? 'Practice run · ' : '') + 'Missions cleared: ' + G.cleared + (best ? ' · New best!' : '') + (note ? ' · ' + note : '');
   const tl = $('#rTally'); tl.textContent = '';
   for (let i = 1; i < 10; i++) {
     const row = document.createElement('div');
@@ -98,24 +103,57 @@ function endRun(victory, note){
     if (!G.kills[i]) row.style.opacity = .4;
     tl.appendChild(row);
   }
-  if (G.vs) $('#rTotal').innerHTML = vsPair(a, b); else $('#rTotal').textContent = total;
+  if (G.duel) tl.textContent = '';
+  $('#rTotalLbl').textContent = G.duel ? 'Rounds won' : 'Total';
+  if (G.vs || G.duel) $('#rTotal').innerHTML = vsPair(a, b); else $('#rTotal').textContent = total;
   const md = MEDALS[medal];
   $('#rMedal').innerHTML = md ? '<span class="medal" style="background:' + md.col + '">' + md.n.slice(0, 4) + '</span>' : '';
   $('#results').hidden = false;
   jingle(victory ? 'medal' : 'over');
 }
 const vsPair = (a, b) => '<span style="color:#2f5fb8">' + a + '</span> – <span style="color:#c8382f">' + b + '</span>';
-function startRun(n, practice, coopOn, vsOn){
+function startRun(n, practice, coopOn, vsOn, duelOn){
   audioInit();
-  Object.assign(G, { vs: !!vsOn, score: [new Array(10).fill(0), new Array(10).fill(0)], lives: 3, kills: new Array(10).fill(0), practice, coop: !!coopOn, cleared: 0, start: n, paused: false, medalShown: 0 });
+  Object.assign(G, { duel: !!duelOn, round: 1, wins: [0, 0], vs: !!vsOn, score: [new Array(10).fill(0), new Array(10).fill(0)], lives: 3, kills: new Array(10).fill(0), practice, coop: !!coopOn, cleared: 0, start: n, paused: false, medalShown: 0 });
   for (const id of ['#title', '#results', '#select', '#paused', '#lobby']) $(id).hidden = true;
   $('#hud').hidden = false;
-  loadMission(n);
+  if (G.duel) loadDuel(); else loadMission(n);
+}
+
+/* ---------- Duel: two tanks, no enemies, first to five rounds ---------- */
+const DUEL_WINS = 5;
+// campaign arenas with good cover on both sides, played in turn
+const DUEL_MAPS = [9, 2, 14, 12, 6, 18, 31, 44, 27, 15];
+function freeNear(m, c, r){
+  for (let d = 0; d < 7; d++) for (let dr = -d; dr <= d; dr++) for (let dc = -d; dc <= d; dc++) {
+    if (Math.max(Math.abs(dc), Math.abs(dr)) !== d) continue;
+    const cc = c + dc, rr = r + dr;
+    if (cc >= 0 && rr >= 0 && cc < COLS && rr < ROWS && m.g[rr * COLS + cc] === '.') return [cc, rr];
+  }
+  return [c, r];
+}
+function loadDuel(){
+  const m = MISSIONS[DUEL_MAPS[(G.round - 1) % DUEL_MAPS.length]];
+  clearEntities(); clearTreads(); clearDecals(); G.killed.clear();
+  buildArena(m);
+  // blue starts at the mission's player spot, red at the mirror-image spot across the board
+  const [c1, r1] = freeNear(m, Math.round(m.p[0]), Math.round(m.p[1]));
+  const [c2, r2] = freeNear(m, COLS - 1 - c1, ROWS - 1 - r1);
+  player = spawnTank(0, cellX(c1), cellZ(r1), 0, -1);
+  player2 = spawnTank(10, cellX(c2), cellZ(r2), 2, -2);
+  player.a = player.ta = Math.atan2(player2.x - player.x, player2.z - player.z);
+  player2.a = player2.ta = wrapA(player.ta + Math.PI);
+  tanks.forEach(syncTank);
+  hudUpdate();
+  G.state = 'intro'; G.timer = 2.6;
+  musicStop(.2);
+  banner('<h2>Round ' + G.round + '</h2><p>First to ' + DUEL_WINS + ' wins</p>' + scoreHTML());
+  jingle('start');
 }
 function toTitle(){
   for (const id of ['#results', '#select', '#paused', '#hud', '#lobby']) $(id).hidden = true;
   banner(null); musicStop(.2); leaveCoop();
-  G.state = 'title'; G.paused = false; G.coop = false; G.vs = false;
+  G.state = 'title'; G.paused = false; G.coop = false; G.vs = false; G.duel = false;
   showTitle();
 }
 function showTitle(){
@@ -148,7 +186,7 @@ function update(dt){
   if (S === 'results') return;
   G.timer -= dt;
   if (S === 'intro') { if (G.timer <= 0) beginPlay(); return; }
-  if (S === 'play' || S === 'dying' || S === 'clearing') {
+  if (S === 'play' || S === 'dying' || S === 'clearing' || S === 'roundend') {
     if (S === 'play') { if (G.coop) readPads(); updatePlayer(player, 0, dt); if (player2) updatePlayer(player2, 1, dt); }
     const anyone = livePlayers().length > 0;
     for (const t of tanks) if (t.alive && t.team === 1 && anyone) updateEnemy(t, dt);
@@ -156,8 +194,22 @@ function update(dt){
     updateBullets(dt);
     updateMines(dt);
     for (const t of tanks) if (t.alive) syncTank(t);
-    if (G.state === 'play' && enemiesAlive().length === 0) { G.state = 'clearing'; G.timer = 1; musicStop(.6); }
+    if (G.duel) { if (G.state === 'play' && livePlayers().length < 2) { G.state = 'roundend'; G.timer = 1.1; } }
+    else if (G.state === 'play' && enemiesAlive().length === 0) { G.state = 'clearing'; G.timer = 1; musicStop(.6); }
   }
+  if (G.state === 'roundend' && G.timer <= 0) {
+    // a short grace period lets a trade of shots end in a draw
+    const alive = livePlayers(); musicStop(.4);
+    if (alive.length === 1) {
+      const w = alive[0] === player ? 0 : 1; G.wins[w]++;
+      banner('<h2>' + (w ? 'Red' : 'Blue') + ' takes round ' + G.round + '</h2>' + scoreHTML(), w ? '' : 'blue'); jingle('clear');
+    } else { banner('<h2>Draw!</h2><p>Both tanks went down</p>' + scoreHTML(), 'gold'); jingle('death'); }
+    hudUpdate(); G.state = 'roundover'; G.timer = 2.8;
+    for (const b of bullets) killBullet(b, true);
+    for (const m of mines) { m.alive = false; scene.remove(m.mesh); m.owner.nm--; }
+    return;
+  }
+  if (G.state === 'roundover' && G.timer <= 0) { if (Math.max(G.wins[0], G.wins[1]) >= DUEL_WINS) endRun(true); else { G.round++; loadDuel(); } return; }
   if (G.state === 'clearing' && G.timer <= 0) {
     if (!livePlayers().length) { G.state = 'dying'; G.timer = .1; return; }
     G.state = 'cleared'; G.timer = 3.2; G.cleared++;
