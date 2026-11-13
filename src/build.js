@@ -12,7 +12,7 @@ const patch = `
 `;
 // phones opened from the co-op QR code become controllers instead of loading the game
 const prelude = "const ARTIFACT_URL = 'https://claude.ai/artifact/6magk5YpBRQpRVky4MeeWn';\nconst HASH = (location.hash || '').slice(1).toLowerCase();\nif (/^pad-[a-z0-9]{4,12}$/.test(HASH)) { runPad(HASH.slice(4)); return; }\n";
-const js = prelude + rd('data.js') + '\n' + patch + '\n' + ['core.js', 'game.js', 'net.js', 'coop.js', 'ui.js', 'pad.js'].map(rd).join('\n');
+const js = prelude + rd('data.js') + '\n' + patch + '\n' + ['core.js', 'game.js', 'net.js', 'coop.js', 'ui.js', 'gamepad.js', 'pad.js'].map(rd).join('\n');
 new Function('(() => {' + js + '})');
 const page = rd('head.html') + '\n<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>\n<script>\n(() => {\n' + js + '\n})();\n</script>\n';
 const html = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<style>[hidden]{display:none!important}</style>\n</head>\n<body>\n' + page + '</body>\n</html>\n';

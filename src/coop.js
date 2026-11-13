@@ -47,7 +47,7 @@ async function openCoop(mode){
 function showLobby(){
   const L = lob();
   $('#lobby').hidden = false; L.room.hidden = false;
-  lobbyMsg('Scan the code with one or two phones. Each phone becomes a tank controller, and this screen shows the battle. Put it on the TV.');
+  lobbyMsg('Scan the code with one or two phones, or press A on a controller. Each phone or controller drives a tank, and this screen shows the battle. Put it on the TV.');
   const link = coop.base + '#pad-' + coop.code;
   L.link.textContent = link;
   L.qr.innerHTML = '';
@@ -60,9 +60,10 @@ function renderSeats(){
   if (!coop) return;
   const L = lob(), n = coop.slots.filter(Boolean).length;
   L.seats.textContent = '';
+  const what = id => isGpSeat(id) ? (gpPads().some(p => p.index === gpSeatIndex(id) && isNintendo(p)) ? 'Pro Controller connected' : 'Controller connected') : 'Phone connected';
   const rows = n === 1
-    ? [[0, 'Player 1 · Blue', 'Keyboard and mouse on this computer', true], [1, 'Player 2 · Red', 'Phone connected', true]]
-    : [0, 1].map(i => [i, i ? 'Player 2 · Red' : 'Player 1 · Blue', coop.slots[i] ? 'Phone connected' : 'Waiting for a phone', !!coop.slots[i]]);
+    ? [[0, 'Player 1 · Blue', 'Keyboard and mouse on this computer', true], [1, 'Player 2 · Red', what(coop.slots.find(Boolean)), true]]
+    : [0, 1].map(i => [i, i ? 'Player 2 · Red' : 'Player 1 · Blue', coop.slots[i] ? what(coop.slots[i]) : 'Waiting for a phone or controller', !!coop.slots[i]]);
   for (const [i, who, st, ok] of rows) {
     const li = document.createElement('li'), a = document.createElement('span'), dot = document.createElement('i'), b = document.createElement('span');
     dot.className = 'tico'; dot.style.background = TIERS[i ? 10 : 0].col; a.append(dot, who);
@@ -70,8 +71,8 @@ function renderSeats(){
     li.append(a, b); L.seats.appendChild(li);
   }
   L.start.disabled = n === 0;
-  L.start.textContent = n === 2 ? 'Start' : n === 1 ? 'Start with one phone' : 'Start';
-  L.note.textContent = n === 1 ? 'With one phone, player 1 drives with the keyboard and mouse. Scan with a second phone to put both players on phones.' : 'Phones need internet access. They do not need to be on the same Wi-Fi as this screen.';
+  L.start.textContent = n === 1 ? (isGpSeat(coop.slots.find(Boolean)) ? 'Start with one controller' : 'Start with one phone') : 'Start';
+  L.note.textContent = n === 1 ? 'With one phone or controller, player 1 drives with the keyboard and mouse. Add a second one to put both players on phones or controllers.' : 'Phones need internet access. They do not need to be on the same Wi-Fi as this screen.';
 }
 function pushTv(extra){
   if (!coop) return;
@@ -81,7 +82,8 @@ function pushTv(extra){
 function onCoopPeers(ch){
   if (!coop) return;
   const pads = ch.peers.filter(p => !p.sameTab && p.presence && p.presence.r === 'pad');
-  const has = id => pads.some(p => p.peer === id);
+  // controller seats live on this screen, so the room's peer list never drops them
+  const has = id => isGpSeat(id) || pads.some(p => p.peer === id);
   for (let i = 0; i < 2; i++) if (coop.slots[i] && !has(coop.slots[i])) coop.slots[i] = null;
   for (const p of pads) if (!coop.slots.includes(p.peer)) { const i = coop.slots.indexOf(null); if (i >= 0) coop.slots[i] = p.peer; }
   // during a run: free the seat of a phone that left, and hand an empty seat to a phone that (re)joins
@@ -115,7 +117,7 @@ function readPads(){
   if (!coop) return;
   const peers = coop.room.peers();
   for (let i = 0; i < 2; i++) {
-    const id = coop.ctrl[i]; if (!id || id === 'kb') continue;
+    const id = coop.ctrl[i]; if (!id || id === 'kb' || isGpSeat(id)) continue;
     const pr = peers.find(p => p.peer === id), s = (pr && pr.presence) || {}, P = padIn[i];
     const c1 = v => isNum(v) ? clamp(v, -1, 1) : 0;
     P.mx = c1(s.mx); P.my = c1(s.my); P.ax = c1(s.ax); P.ay = c1(s.ay);

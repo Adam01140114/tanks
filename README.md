@@ -30,6 +30,21 @@ A 1-on-1 fight with no enemy tanks. Both players have the same shells and mines 
 | Lay a mine | Right click / Space |
 | Pause | P / Esc |
 
+## Controls (Switch Pro Controller or any gamepad)
+
+Connect a Nintendo Switch Pro Controller (USB or Bluetooth) and press a button so the browser sees it. Xbox and PlayStation controllers work too, with confirm and back on their usual buttons.
+
+| Action | Pro Controller |
+| --- | --- |
+| Move | Left stick / D-pad |
+| Aim | Right stick |
+| Fire | ZR / R / A |
+| Lay a mine | ZL / L / B |
+| Pause / resume | + |
+| Menus | Stick or D-pad to move, A to pick, B to go back |
+
+With no seat taken, a controller plays player 1 alongside the keyboard and mouse. In the **Co-op**, **Versus** and **Duel** lobbies, press A on a controller to take a seat, the same way a phone does by scanning the code. Two controllers fill both seats and start the game, no phones needed. Controllers rumble when you fire and when your tank is destroyed (Chrome and Edge).
+
 ## Running it
 
 ```bash
@@ -58,6 +73,7 @@ Render sets `PORT` for you.
   - `ui.js`: flow and input.
   - `net.js` and `coop.js`: co-op rooms.
   - `pad.js`: the phone controller.
+  - `gamepad.js`: Pro Controller and other gamepads.
   - `data.js`: the 100 missions.
 
   After editing anything in `src/`, run `npm run build` to rebuild `index.html`.

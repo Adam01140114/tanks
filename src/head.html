@@ -20,6 +20,8 @@ button{font-family:var(--f-d)}
 .btn{appearance:none;border:0;background:var(--paper);color:var(--ink);font:600 20px/1 var(--f-d);padding:13px 22px 12px;border-radius:14px;box-shadow:0 5px 0 rgba(43,33,24,.45);cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center;transition:transform .08s}
 .btn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(43,33,24,.45)}
 .btn:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+body.gp button.gpsel{outline:3px solid var(--gold);outline-offset:3px}
+body.gp .mgrid button.gpsel{background:var(--gold)}
 .btn.red{background:var(--ribbon);color:var(--paper)} .btn.blue{background:var(--ribbon2);color:var(--paper)}
 .btn.big{font-size:30px;padding:16px 34px 14px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
@@ -141,6 +143,7 @@ body.touch .stick{display:block}
         <div><span>Lay a mine</span><kbd>Right click / Space</kbd></div>
         <div><span>Pause</span><kbd>P / Esc</kbd></div>
         <div><span>Touch</span><kbd>Stick + tap to fire</kbd></div>
+        <div><span>Controller</span><kbd>Sticks · ZR fire · ZL mine · + pause</kbd></div>
       </div>
     </div>
   </div>

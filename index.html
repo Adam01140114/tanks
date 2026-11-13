@@ -28,6 +28,8 @@ button{font-family:var(--f-d)}
 .btn{appearance:none;border:0;background:var(--paper);color:var(--ink);font:600 20px/1 var(--f-d);padding:13px 22px 12px;border-radius:14px;box-shadow:0 5px 0 rgba(43,33,24,.45);cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center;transition:transform .08s}
 .btn:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(43,33,24,.45)}
 .btn:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+body.gp button.gpsel{outline:3px solid var(--gold);outline-offset:3px}
+body.gp .mgrid button.gpsel{background:var(--gold)}
 .btn.red{background:var(--ribbon);color:var(--paper)} .btn.blue{background:var(--ribbon2);color:var(--paper)}
 .btn.big{font-size:30px;padding:16px 34px 14px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
@@ -149,6 +151,7 @@ body.touch .stick{display:block}
         <div><span>Lay a mine</span><kbd>Right click / Space</kbd></div>
         <div><span>Pause</span><kbd>P / Esc</kbd></div>
         <div><span>Touch</span><kbd>Stick + tap to fire</kbd></div>
+        <div><span>Controller</span><kbd>Sticks · ZR fire · ZL mine · + pause</kbd></div>
       </div>
     </div>
   </div>
@@ -1206,7 +1209,7 @@ async function openCoop(mode){
 function showLobby(){
   const L = lob();
   $('#lobby').hidden = false; L.room.hidden = false;
-  lobbyMsg('Scan the code with one or two phones. Each phone becomes a tank controller, and this screen shows the battle. Put it on the TV.');
+  lobbyMsg('Scan the code with one or two phones, or press A on a controller. Each phone or controller drives a tank, and this screen shows the battle. Put it on the TV.');
   const link = coop.base + '#pad-' + coop.code;
   L.link.textContent = link;
   L.qr.innerHTML = '';
@@ -1219,9 +1222,10 @@ function renderSeats(){
   if (!coop) return;
   const L = lob(), n = coop.slots.filter(Boolean).length;
   L.seats.textContent = '';
+  const what = id => isGpSeat(id) ? (gpPads().some(p => p.index === gpSeatIndex(id) && isNintendo(p)) ? 'Pro Controller connected' : 'Controller connected') : 'Phone connected';
   const rows = n === 1
-    ? [[0, 'Player 1 · Blue', 'Keyboard and mouse on this computer', true], [1, 'Player 2 · Red', 'Phone connected', true]]
-    : [0, 1].map(i => [i, i ? 'Player 2 · Red' : 'Player 1 · Blue', coop.slots[i] ? 'Phone connected' : 'Waiting for a phone', !!coop.slots[i]]);
+    ? [[0, 'Player 1 · Blue', 'Keyboard and mouse on this computer', true], [1, 'Player 2 · Red', what(coop.slots.find(Boolean)), true]]
+    : [0, 1].map(i => [i, i ? 'Player 2 · Red' : 'Player 1 · Blue', coop.slots[i] ? what(coop.slots[i]) : 'Waiting for a phone or controller', !!coop.slots[i]]);
   for (const [i, who, st, ok] of rows) {
     const li = document.createElement('li'), a = document.createElement('span'), dot = document.createElement('i'), b = document.createElement('span');
     dot.className = 'tico'; dot.style.background = TIERS[i ? 10 : 0].col; a.append(dot, who);
@@ -1229,8 +1233,8 @@ function renderSeats(){
     li.append(a, b); L.seats.appendChild(li);
   }
   L.start.disabled = n === 0;
-  L.start.textContent = n === 2 ? 'Start' : n === 1 ? 'Start with one phone' : 'Start';
-  L.note.textContent = n === 1 ? 'With one phone, player 1 drives with the keyboard and mouse. Scan with a second phone to put both players on phones.' : 'Phones need internet access. They do not need to be on the same Wi-Fi as this screen.';
+  L.start.textContent = n === 1 ? (isGpSeat(coop.slots.find(Boolean)) ? 'Start with one controller' : 'Start with one phone') : 'Start';
+  L.note.textContent = n === 1 ? 'With one phone or controller, player 1 drives with the keyboard and mouse. Add a second one to put both players on phones or controllers.' : 'Phones need internet access. They do not need to be on the same Wi-Fi as this screen.';
 }
 function pushTv(extra){
   if (!coop) return;
@@ -1240,7 +1244,8 @@ function pushTv(extra){
 function onCoopPeers(ch){
   if (!coop) return;
   const pads = ch.peers.filter(p => !p.sameTab && p.presence && p.presence.r === 'pad');
-  const has = id => pads.some(p => p.peer === id);
+  // controller seats live on this screen, so the room's peer list never drops them
+  const has = id => isGpSeat(id) || pads.some(p => p.peer === id);
   for (let i = 0; i < 2; i++) if (coop.slots[i] && !has(coop.slots[i])) coop.slots[i] = null;
   for (const p of pads) if (!coop.slots.includes(p.peer)) { const i = coop.slots.indexOf(null); if (i >= 0) coop.slots[i] = p.peer; }
   // during a run: free the seat of a phone that left, and hand an empty seat to a phone that (re)joins
@@ -1274,7 +1279,7 @@ function readPads(){
   if (!coop) return;
   const peers = coop.room.peers();
   for (let i = 0; i < 2; i++) {
-    const id = coop.ctrl[i]; if (!id || id === 'kb') continue;
+    const id = coop.ctrl[i]; if (!id || id === 'kb' || isGpSeat(id)) continue;
     const pr = peers.find(p => p.peer === id), s = (pr && pr.presence) || {}, P = padIn[i];
     const c1 = v => isNum(v) ? clamp(v, -1, 1) : 0;
     P.mx = c1(s.mx); P.my = c1(s.my); P.ax = c1(s.ax); P.ay = c1(s.ay);
@@ -1360,6 +1365,7 @@ const vsTotal = i => G.score[i].reduce((a, b) => a + b, 0);
 const pairScore = () => G.duel ? G.wins : [vsTotal(0), vsTotal(1)];
 const scoreHTML = () => '<span class="lv"><i class="tico" style="background:' + TIERS[0].col + '"></i>' + pairScore()[0] + '<span style="opacity:.6">–</span>' + pairScore()[1] + '<i class="tico" style="background:' + TIERS[10].col + '"></i></span>';
 function onTankKilled(t, by){
+  if (t === player || t === player2) gpRumbleSeat(t === player ? 0 : 1, true);
   if (t.team === 1) {
     G.killed.add(t.idx);
     G.kills[t.tier]++;
@@ -1552,7 +1558,8 @@ function update(dt){
 
 /* ---------- input ---------- */
 const keys = new Set();
-const inp = { sx: 0, sz: 0, fire: false, mine: false, mx: innerWidth / 2, my: innerHeight / 3, aimX: 0, aimZ: 0, touchAim: false };
+// padAim: a controller's right stick is aiming player 1 instead of the mouse (see gamepad.js)
+const inp = { sx: 0, sz: 0, fire: false, mine: false, mx: innerWidth / 2, my: innerHeight / 3, aimX: 0, aimZ: 0, touchAim: false, padAim: false };
 const playing = () => G.state !== 'title' && G.state !== 'results' && !G.paused;
 addEventListener('keydown', e => {
   if (e.repeat) { if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); return; }
@@ -1636,9 +1643,9 @@ function updatePlayer(p, i, dt){
   if (!p || !p.alive) return;
   p.cool -= dt; p.stun -= dt;
   let mx = 0, mz = 0;
+  const seat = G.coop && coop ? coop.ctrl[i] : null;
   if (usesKeyboard(i)) {
-    aimFromScreen();
-    p.ta = Math.atan2(inp.aimX - p.x, inp.aimZ - p.z);
+    if (!inp.padAim) { aimFromScreen(); p.ta = Math.atan2(inp.aimX - p.x, inp.aimZ - p.z); }
     if (inp.fire) { inp.fire = false; fire(p); }
     if (inp.mine) { inp.mine = false; layMine(p); }
     if (keys.has('KeyW') || keys.has('ArrowUp')) mz -= 1;
@@ -1646,6 +1653,10 @@ function updatePlayer(p, i, dt){
     if (keys.has('KeyA') || keys.has('ArrowLeft')) mx -= 1;
     if (keys.has('KeyD') || keys.has('ArrowRight')) mx += 1;
     mx += inp.sx; mz += inp.sz;
+    for (const k of gpFreeIdx()) if (gpIn[k]) { const [gx, gz] = gpDrive(p, gpIn[k], i); mx += gx; mz += gz; }
+  } else if (isGpSeat(seat)) {
+    const g = gpIn[gpSeatIndex(seat)];
+    if (g) [mx, mz] = gpDrive(p, g, i);
   } else {
     const s = padIn[i];
     if (Math.hypot(s.ax, s.ay) > .25) p.ta = Math.atan2(s.ax, s.ay);
@@ -1690,9 +1701,9 @@ function toScreen(x, y, z){ _pj.set(x, y, z).project(camera); return [(_pj.x + 1
 function drawHud(){
   hg.clearRect(0, 0, innerWidth, innerHeight);
   const live = (G.state === 'play' || G.state === 'intro') && !G.paused;
-  // phone players get a short dotted sight line in their own colour
-  if (live && G.coop) for (const [i, p] of [[0, player], [1, player2]]) {
-    if (!p || !p.alive || usesKeyboard(i)) continue;
+  // players aiming with a stick (phone or controller) get a short dotted sight line in their own colour
+  if (live) for (const [i, p] of [[0, player], [1, player2]]) {
+    if (!p || !p.alive || (usesKeyboard(i) && !inp.padAim)) continue;
     hg.fillStyle = p.def.col;
     const sx = Math.sin(p.ta), sz = Math.cos(p.ta);
     for (let s = .9; s < 4.6; s += .45) {
@@ -1701,7 +1712,7 @@ function drawHud(){
     }
     hg.globalAlpha = 1;
   }
-  const show = live && player && player.alive && usesKeyboard(0);
+  const show = live && player && player.alive && usesKeyboard(0) && !inp.padAim;
   app.classList.toggle('aiming', !!show && !inp.touchAim);
   if (!show) return;
   if (G.state === 'intro') aimFromScreen();
@@ -1725,6 +1736,7 @@ let last = performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt = Math.min(.033, Math.max(0, (now - last) / 1000)); last = now;
+  pollGamepads(dt);
   if (!G.paused) {
     update(dt);
     updatePool(firePool, dt, true); updatePool(smokePool, dt, true); updatePool(chipPool, dt, false);
@@ -1739,6 +1751,189 @@ function frame(now){
 fitCamera();
 showTitle();
 requestAnimationFrame(frame);
+
+/* ---------- Game controllers: Nintendo Switch Pro Controller (and any standard gamepad) ----------
+ * Chrome and Edge report the Pro Controller with the "standard" layout, buttons by position:
+ *   0 bottom (B on Switch)  1 right (A)  2 left (Y)  3 top (X)
+ *   4 L  5 R  6 ZL  7 ZR  8 −  9 +  10/11 stick clicks  12–15 d-pad  16 Home
+ *   axes 0/1 left stick, 2/3 right stick
+ * Xbox and PlayStation pads use the same positions, so they work too; only confirm/back swap sides.
+ *
+ * In a game:  left stick or d-pad drives, right stick aims, ZR / R / A fire, ZL / L / B lay a mine, + pauses.
+ * In menus:   stick or d-pad moves, A picks, B goes back, + also picks (and resumes from pause).
+ * Seats:      a controller that holds no co-op seat drives player 1 alongside the keyboard and mouse.
+ *             In the co-op lobby, pressing A on a controller takes a seat, like a phone scanning the code.
+ */
+const GP_DEAD = .2;
+const gpIn = {};   // by gamepad index: { mx, my, ax, ay, aiming, fire, mine }
+const gpPrev = {}; // each pad's buttons last frame, to catch fresh presses
+const isGpSeat = id => typeof id === 'string' && id.startsWith('gp:');
+const gpSeatIndex = id => +id.slice(3);
+const isNintendo = pad => /057e|nintendo|pro controller|joy-?con/i.test(pad.id);
+// Nintendo puts A (confirm) on the right and B (back) at the bottom; Xbox and PlayStation are the other way round
+const gpConfirm = pad => isNintendo(pad) ? 1 : 0;
+const gpBack = pad => isNintendo(pad) ? 0 : 1;
+const gpName = pad => isNintendo(pad) ? 'Pro Controller' : 'Controller';
+const gpPads = () => navigator.getGamepads ? [...navigator.getGamepads()].filter(p => p && p.connected) : [];
+
+// radial dead zone, rescaled so the stick still reaches full speed
+function gpStick(x, y){
+  const n = Math.hypot(x, y);
+  if (n < GP_DEAD) return [0, 0, 0];
+  const m = Math.min(1, (n - GP_DEAD) / (1 - GP_DEAD));
+  return [x / n * m, y / n * m, m];
+}
+
+/* which co-op seat a controller holds, or -1 (lobby seats before the run, control seats during it) */
+function gpSeatOf(idx){
+  if (!coop) return -1;
+  const list = G.coop && $('#lobby').hidden ? coop.ctrl : coop.slots;
+  return list.indexOf('gp:' + idx);
+}
+// controllers without a seat help drive player 1 whenever player 1 is on the keyboard
+const gpFreeIdx = () => gpPads().map(p => p.index).filter(i => gpSeatOf(i) < 0);
+
+/* the tank side: steer, aim and shoot from one controller's state; returns the drive vector */
+function gpDrive(p, g, seat){
+  if (g.aiming) p.ta = Math.atan2(g.ax, g.ay);
+  if (g.fire) { g.fire = false; if (fire(p)) gpRumbleSeat(seat, false); }
+  if (g.mine) { g.mine = false; layMine(p); }
+  return [g.mx, g.my];
+}
+
+/* rumble, where the browser and controller support it (Chrome does for the Pro Controller) */
+function gpRumble(idx, strong){
+  const pad = gpPads().find(p => p.index === idx), a = pad && pad.vibrationActuator;
+  if (!a || !a.playEffect) return;
+  a.playEffect('dual-rumble', strong
+    ? { duration: 420, strongMagnitude: 1, weakMagnitude: .7 }
+    : { duration: 60, strongMagnitude: 0, weakMagnitude: .45 }).catch(() => {});
+}
+function gpRumbleSeat(i, strong){
+  const seat = G.coop && coop ? coop.ctrl[i] : null;
+  if (isGpSeat(seat)) gpRumble(gpSeatIndex(seat), strong);
+  else if (usesKeyboard(i) && inp.padAim) for (const k of gpFreeIdx()) gpRumble(k, strong);
+}
+
+/* ---------- menus ---------- */
+const GP_MENUS = ['#paused', '#select', '#results', '#lobby', '#title'];
+const GP_BACK = { '#paused': '#pResume', '#select': '#sClose', '#results': '#rMenu', '#lobby': '#lBack' };
+function gpMenu(){
+  for (const id of GP_MENUS) { const el = $(id); if (!el.hidden && el.offsetParent !== null) return id; }
+  return null;
+}
+const gpButtons = menu => [...$(menu).querySelectorAll('button')].filter(b => !b.disabled && b.offsetParent !== null);
+// the highlighted button carries .gpsel, so it shows even when the browser window isn't focused
+const gpSel = () => document.querySelector('.gpsel');
+function gpFocus(b){
+  if (!b) return;
+  const old = gpSel(); if (old && old !== b) old.classList.remove('gpsel');
+  b.classList.add('gpsel');
+  b.focus({ preventScroll: true });
+  b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+// land on the main action: the red button if there is one, otherwise the first
+function gpFocusDefault(menu){
+  const list = gpButtons(menu);
+  gpFocus(list.find(b => b.classList.contains('red')) || list[0]);
+}
+// move to the nearest button in that direction, or wrap around the list
+function gpMove(menu, dx, dy){
+  const list = gpButtons(menu); if (!list.length) return;
+  const cur = list.includes(gpSel()) ? gpSel() : null;
+  if (!cur) return gpFocusDefault(menu);
+  const r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let best = null, score = Infinity;
+  for (const b of list) {
+    if (b === cur) continue;
+    const q = b.getBoundingClientRect(), x = q.left + q.width / 2 - cx, y = q.top + q.height / 2 - cy;
+    const along = dx ? x * dx : y * dy;
+    if (along <= 4) continue;
+    const s = along + (dx ? Math.abs(y) : Math.abs(x)) * 2.5;
+    if (s < score) { score = s; best = b; }
+  }
+  if (!best) { const i = list.indexOf(cur), step = dx || dy; best = list[(i + step + list.length) % list.length]; }
+  if (best !== cur) { gpFocus(best); sfx('ui', .35); }
+}
+function gpPress(menu, pad){
+  if (menu === '#lobby' && gpJoin(pad)) return;
+  const cur = gpSel();
+  if (gpButtons(menu).includes(cur)) cur.click(); else gpFocusDefault(menu);
+}
+
+/* ---------- co-op lobby: a controller takes a seat ---------- */
+function gpJoin(pad){
+  if (!coop || $('#lRoom').hidden) return false;
+  const id = 'gp:' + pad.index;
+  if (coop.slots.includes(id)) return false;
+  const k = coop.slots.indexOf(null);
+  if (k < 0) { toastMsg('Both seats are taken.'); return true; }
+  coop.slots[k] = id;
+  sfx('ui'); renderSeats(); pushTv();
+  // both seats filled starts the game, the same as when a second phone joins
+  if (coop.slots[0] && coop.slots[1]) coopGo(); else gpFocusDefault('#lobby');
+  return true;
+}
+function gpLeaveSeats(idx){
+  if (!coop) return;
+  const id = 'gp:' + idx;
+  const k = coop.slots.indexOf(id);
+  if (k >= 0 && !$('#lobby').hidden) { coop.slots[k] = null; renderSeats(); pushTv(); }
+  const c = coop.ctrl.indexOf(id);
+  if (c >= 0 && G.coop && $('#lobby').hidden) toastMsg(`Player ${c + 1}'s controller disconnected. Reconnect it to keep playing.`);
+}
+
+/* ---------- every frame ---------- */
+const gpNav = { dir: '', t: 0, menu: null };
+function pollGamepads(dt){
+  const pads = gpPads();
+  if (!pads.length) return;
+  const menu = gpMenu();
+  if (menu !== gpNav.menu) { gpNav.menu = menu; if (menu && document.body.classList.contains('gp')) gpFocusDefault(menu); }
+  let dir = '';
+  for (const pad of pads) {
+    const i = pad.index, b = pad.buttons.map(x => x.pressed), prev = gpPrev[i] || [];
+    const down = k => !!b[k] && !prev[k];
+    gpPrev[i] = b;
+    const ax = pad.axes;
+    let [mx, my] = gpStick(ax[0] || 0, ax[1] || 0);
+    if (b[12]) my -= 1; if (b[13]) my += 1; if (b[14]) mx -= 1; if (b[15]) mx += 1;
+    const [rx, ry, rn] = gpStick(ax[2] || 0, ax[3] || 0);
+    const g = gpIn[i] || (gpIn[i] = { mx: 0, my: 0, ax: 0, ay: 0, aiming: false, fire: false, mine: false });
+    g.mx = mx; g.my = my; g.ax = rx; g.ay = ry; g.aiming = rn > .3;
+    const used = b.some(Boolean) || mx || my || rn;
+    if (used) document.body.classList.add('gp');
+    const conf = gpConfirm(pad), back = gpBack(pad);
+    if (menu) {
+      if (Math.abs(mx) > .5 || Math.abs(my) > .5) dir = dir || (Math.abs(mx) > Math.abs(my) ? (mx > 0 ? 'r' : 'l') : (my > 0 ? 'd' : 'u'));
+      if (menu === '#paused' && down(9)) { setPause(false); continue; }
+      if (down(conf) || down(9)) { audioInit(); gpPress(menu, pad); }
+      else if (down(back)) { const el = GP_BACK[menu] && $(GP_BACK[menu]); if (el && !el.disabled) el.click(); }
+      continue;
+    }
+    if (down(9) && playing()) { setPause(true); continue; }
+    if (G.state === 'play' && !G.paused) {
+      if (down(7) || down(5) || down(conf)) g.fire = true;
+      if (down(6) || down(4) || down(back)) g.mine = true;
+    }
+    // a free controller aiming or shooting takes the sight over from the mouse
+    if (used && gpSeatOf(i) < 0) inp.padAim = true;
+  }
+  if (menu && dir) {
+    const step = () => gpMove(menu, dir === 'r' ? 1 : dir === 'l' ? -1 : 0, dir === 'd' ? 1 : dir === 'u' ? -1 : 0);
+    if (dir !== gpNav.dir) { gpNav.dir = dir; gpNav.t = .38; step(); }
+    else if ((gpNav.t -= dt) <= 0) { gpNav.t = .13; step(); }
+  } else gpNav.dir = '';
+}
+
+addEventListener('gamepadconnected', e => { toastMsg(`${gpName(e.gamepad)} connected`); });
+addEventListener('gamepaddisconnected', e => {
+  const i = e.gamepad.index;
+  delete gpIn[i]; delete gpPrev[i];
+  gpLeaveSeats(i);
+});
+// the mouse takes over again as soon as it moves
+addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && (e.movementX || e.movementY)) { document.body.classList.remove('gp'); inp.padAim = false; } });
 
 /* ---------- Phone controller (opened from the co-op QR code) ---------- */
 function runPad(code){

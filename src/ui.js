@@ -53,6 +53,7 @@ const vsTotal = i => G.score[i].reduce((a, b) => a + b, 0);
 const pairScore = () => G.duel ? G.wins : [vsTotal(0), vsTotal(1)];
 const scoreHTML = () => '<span class="lv"><i class="tico" style="background:' + TIERS[0].col + '"></i>' + pairScore()[0] + '<span style="opacity:.6">–</span>' + pairScore()[1] + '<i class="tico" style="background:' + TIERS[10].col + '"></i></span>';
 function onTankKilled(t, by){
+  if (t === player || t === player2) gpRumbleSeat(t === player ? 0 : 1, true);
   if (t.team === 1) {
     G.killed.add(t.idx);
     G.kills[t.tier]++;
@@ -245,7 +246,8 @@ function update(dt){
 
 /* ---------- input ---------- */
 const keys = new Set();
-const inp = { sx: 0, sz: 0, fire: false, mine: false, mx: innerWidth / 2, my: innerHeight / 3, aimX: 0, aimZ: 0, touchAim: false };
+// padAim: a controller's right stick is aiming player 1 instead of the mouse (see gamepad.js)
+const inp = { sx: 0, sz: 0, fire: false, mine: false, mx: innerWidth / 2, my: innerHeight / 3, aimX: 0, aimZ: 0, touchAim: false, padAim: false };
 const playing = () => G.state !== 'title' && G.state !== 'results' && !G.paused;
 addEventListener('keydown', e => {
   if (e.repeat) { if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); return; }
@@ -329,9 +331,9 @@ function updatePlayer(p, i, dt){
   if (!p || !p.alive) return;
   p.cool -= dt; p.stun -= dt;
   let mx = 0, mz = 0;
+  const seat = G.coop && coop ? coop.ctrl[i] : null;
   if (usesKeyboard(i)) {
-    aimFromScreen();
-    p.ta = Math.atan2(inp.aimX - p.x, inp.aimZ - p.z);
+    if (!inp.padAim) { aimFromScreen(); p.ta = Math.atan2(inp.aimX - p.x, inp.aimZ - p.z); }
     if (inp.fire) { inp.fire = false; fire(p); }
     if (inp.mine) { inp.mine = false; layMine(p); }
     if (keys.has('KeyW') || keys.has('ArrowUp')) mz -= 1;
@@ -339,6 +341,10 @@ function updatePlayer(p, i, dt){
     if (keys.has('KeyA') || keys.has('ArrowLeft')) mx -= 1;
     if (keys.has('KeyD') || keys.has('ArrowRight')) mx += 1;
     mx += inp.sx; mz += inp.sz;
+    for (const k of gpFreeIdx()) if (gpIn[k]) { const [gx, gz] = gpDrive(p, gpIn[k], i); mx += gx; mz += gz; }
+  } else if (isGpSeat(seat)) {
+    const g = gpIn[gpSeatIndex(seat)];
+    if (g) [mx, mz] = gpDrive(p, g, i);
   } else {
     const s = padIn[i];
     if (Math.hypot(s.ax, s.ay) > .25) p.ta = Math.atan2(s.ax, s.ay);
@@ -383,9 +389,9 @@ function toScreen(x, y, z){ _pj.set(x, y, z).project(camera); return [(_pj.x + 1
 function drawHud(){
   hg.clearRect(0, 0, innerWidth, innerHeight);
   const live = (G.state === 'play' || G.state === 'intro') && !G.paused;
-  // phone players get a short dotted sight line in their own colour
-  if (live && G.coop) for (const [i, p] of [[0, player], [1, player2]]) {
-    if (!p || !p.alive || usesKeyboard(i)) continue;
+  // players aiming with a stick (phone or controller) get a short dotted sight line in their own colour
+  if (live) for (const [i, p] of [[0, player], [1, player2]]) {
+    if (!p || !p.alive || (usesKeyboard(i) && !inp.padAim)) continue;
     hg.fillStyle = p.def.col;
     const sx = Math.sin(p.ta), sz = Math.cos(p.ta);
     for (let s = .9; s < 4.6; s += .45) {
@@ -394,7 +400,7 @@ function drawHud(){
     }
     hg.globalAlpha = 1;
   }
-  const show = live && player && player.alive && usesKeyboard(0);
+  const show = live && player && player.alive && usesKeyboard(0) && !inp.padAim;
   app.classList.toggle('aiming', !!show && !inp.touchAim);
   if (!show) return;
   if (G.state === 'intro') aimFromScreen();
@@ -418,6 +424,7 @@ let last = performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt = Math.min(.033, Math.max(0, (now - last) / 1000)); last = now;
+  pollGamepads(dt);
   if (!G.paused) {
     update(dt);
     updatePool(firePool, dt, true); updatePool(smokePool, dt, true); updatePool(chipPool, dt, false);
